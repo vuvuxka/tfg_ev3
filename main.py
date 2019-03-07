@@ -6,7 +6,7 @@ import ev3dev.ev3 as ev3
 import importlib
 import json
 import ini
-import equilibrio
+from equilibrio import equilibrar
 from inout import eprint
 from ev3dev.ev3 import *
 
@@ -14,13 +14,12 @@ from ev3dev.ev3 import *
 ## ARCHIVO INICIAL PRINCIPAL
 ########################################################################
 
-ini
 eprint("- Inicializacion completada")
 Sound.beep()
-
+time.sleep(0.1)
 while True:
-    equilibrio
-    eprint("A")
+    time.sleep(1)
+    equilibrar()
 
 
 

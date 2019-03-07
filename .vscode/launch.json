@@ -1,8 +1,9 @@
 {
     "version": "0.2.0",
     "configurations": [
+
         {
-            "name": "Download and Run hello.py",
+            "name": "Download and Run.py",
             "type": "ev3devBrowser",
             "request": "launch",
             "program": "/home/robot/${workspaceRootFolderName}/main.py"

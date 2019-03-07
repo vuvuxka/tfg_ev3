@@ -6,107 +6,98 @@ import ev3dev.ev3 as ev3
 import importlib
 import json
 import ini
-from ini import *
+#from ini import *
 import inout
 
 ########################################################################
 ## ARCHIVO PARA EQUILIBRAR A WALLY
 ########################################################################
 
-def offset():
-    gyro_suma = 0.0
-    offset_gyro = 0.0
-    ini.motorLeft.stop()
-    ini.motorRight.stop()
-    time.sleep(0.5)
+def equilibrar():
+    g = ini.Gyro.angle
+    time.sleep(0.002)
+    g = g + ini.Gyro.angle
 
-    for i in range(40):
-        offset_gyro += inout.FastRead(ini.gyroSensorValueRaw)
-        time.sleep(0.05)
-    offset_gyro = offset_gyro/40
+    ini.dtheta = g/2.0 - ini.offset_gyro
+    ini.offset_gyro = ini.offset_gyro*0.999 + (0.001*(ini.dtheta + ini.offset_gyro)) # Actualizamos el offset
+    ini.theta = ini.theta + ini.dtheta*ini.dt
+    ini.theta = ini.theta*0.999 - ini.theta*0.001
+    inout.eprint("ini.theta: " + str(ini.theta))
 
-    time.sleep(1)
-    return offset_gyro
+    if ini.v > ini.velocidad*10.0:
+        ini.v = ini.v + ini.aceleracion*10.0*ini.dt
+    elif ini.v > ini.velocidad*10.0:
+        ini.v = ini.v - ini.aceleracion*10.0*ini.dt
+    ini.xdes = ini.xdes + ini.v*ini.dt
 
-ini.gyroSensorValueRaw = ini.gyroSensorValueRaw + inout.FastRead(gyroSensorValueRaw)
-ini.dtheta = g/2.0 - ini.offset_gyro
-ini.offset_gyro = ini.offset_gyro*0.999 + (0.001*(ini.dtheta + ini.offset_gyro)) # Actualizamos el offset
-ini.theta = ini.theta + ini.dtheta*ini.dt
-ini.theta = ini.theta*0.999 - ini.theta*0.001
+    ini.n = ini.n + 1
+    if ini.n == ini.n_max:
+        ini.n = 0
+    ini.encoder[ini.n] = ini.motorLeft.position + ini.motorRight.position + ini.xdes
+    ini.n_ant = ini.n + 1
+    if ini.n_ant == ini.n_max:
+        ini.n_ant = 0
+    ini.x = ini.encoder[ini.n]*ini.radio*ini.gra2rad
+    ini.dx = (ini.encoder[ini.n] - ini.encoder[ini.n_ant]) / (ini.dt*(ini.n_max - 1))*ini.radio*ini.gra2rad
 
-if ini.v > ini.velocidad*10.0:
-    ini.v = ini.v + ini.aceleracion*10.0*ini.dt
-elif ini.v > ini.velocidad*10.0:
-    ini.v = ini.v - ini.aceleracion*10.0*ini.dt
-ini.xdes = ini.xdes + ini.v*ini.dt
-
-
-"""
-//lectura del giroscopio
-		theta = theta + dtheta*dt;
-		theta = theta*0.999-theta*0.001;
-
-		//introducimos modelo de movimiento uniforme
-		if (v &lt; velocidad*10.0) v = v + aceleracion*10.0*dt;
-		else if (v &gt; velocidad*10.0) v = v - aceleracion*10.0*dt;
-		xdes =  xdes + v*dt;
-
-		//obtencion de la posicion y la velocidad lineal del movil
-		n++;
-		if (n==n_max) n=0;
-		encoder[n]= (nMotorEncoder(motorA) + nMotorEncoder(motorC) + xdes);
-		n_ant = n+1;
-		if (n_ant == n_max) n_ant = 0;
-
-		x = encoder[n]*radio*gra2rad;
-		dx = (encoder[n] - encoder [n_ant]) / (dt*(n_max-1.0))*radio*gra2rad;
+    # contralador PID
+    if ini.velocidad == 0:
+        ini.g_dx = 24
+        ini.g_x = 700
+    else:
+        ini.g_dx = 62
+        ini.g_x = 750
 
 
-		//controlador PID
-		if (velocidad == 0) {
-			g_dx = 24;
-			g_x = 700;
-		}
-		else {
-			g_dx = 62;
-			g_x = 750;
-		}
+    ini.e = ini.g_th*ini.theta + ini.g_dth*ini.dtheta + ini.g_x*ini.x + ini.g_dx*ini.dx
+    ini.de_dt = (ini.e - ini.e_prev)/ini.dt
+    ini.iedt = ini.iedt + ini.e*ini.dt
+    ini.e_prev = ini.e
+    inout.eprint("ini.e = " + str(ini.e))
+    inout.eprint("ini.iedt = " + str(ini.iedt))
+    inout.eprint("ini.de_dt = " + str(ini.de_dt))
+    ini.u = (ini.kp*ini.e + ini.ki*ini.iedt + ini.kd*ini.de_dt)/ini.radio
+    ini.u_rot = ini.rotacion / ini.radio
+    ini.rot_prev = ini.rotacion
 
+    #inout.SetDuty(ini.motorDutyCycleRight, ini.u + ini.u_rot)
+    #inout.SetDuty(ini.motorDutyCycleLeft, ini.u + ini.u_rot)
+    duty = (ini.u + ini.u_rot)*10
+    ini.motorLeft.run_forever(speed_sp=duty)
+    ini.motorRight.run_forever(speed_sp=duty)
 
-		e= g_th*theta + g_dth*dtheta + g_x*x + g_dx*dx;
-		de_dt = (e - e_prev)/dt;
-		iedt = iedt + e*dt;
-		e_prev = e;
-		u = (kp*e + ki*iedt + kd*de_dt)/radio;
-		u_rot = rotacion/(radio);
-		rot_prev = rotacion;
+    inout.eprint("ini.u = " + str(ini.u))
+    inout.eprint("ini.u_rot = " + str(ini.u_rot))
 
-		motor[motorA] = u + u_rot;
-		motor[motorC] = u - u_rot;
+    """
+    //lectura del giroscopio
 
-		//controlador de rotacion
-		if (m &lt; 100) {
-			e_rot = of - o;
+            motor[motorA] = u + u_rot;
+            motor[motorC] = u - u_rot;
 
-			//para buscar el menor sentido de giro
-			if (e_rot &gt; PI) e_rot = e_rot-(2*PI);
-			else if ( e_rot &lt; -PI) e_rot = e_rot + (2*PI);
+            //controlador de rotacion
+            if (m &lt; 100) {
+                e_rot = of - o;
 
-			//Constante Kp del controlador P
-			kp_rot = 6.0;
-			if(abs(e_rot) &gt; gra2rad*5) kp_rot = 0.4;
-			if(m == 10 || m == 20 || m == 30) kp_rot = 0.20;
+                //para buscar el menor sentido de giro
+                if (e_rot &gt; PI) e_rot = e_rot-(2*PI);
+                else if ( e_rot &lt; -PI) e_rot = e_rot + (2*PI);
 
-			rotacion = e_rot*kp_rot;
-		}
+                //Constante Kp del controlador P
+                kp_rot = 6.0;
+                if(abs(e_rot) &gt; gra2rad*5) kp_rot = 0.4;
+                if(m == 10 || m == 20 || m == 30) kp_rot = 0.20;
 
-		while (time1[T1] &lt; dt*1000.0) {
-			wait1Msec(1);
-		}
+                rotacion = e_rot*kp_rot;
+            }
 
-		clearTimer(T1);
-		k++;
+            while (time1[T1] &lt; dt*1000.0) {
+                wait1Msec(1);
+            }
 
-		if (abs(theta) &gt; 60 || abs(u) &gt; 2000) stopAllTasks();
-"""
+            clearTimer(T1);
+            k++;
+
+            if (abs(theta) &gt; 60 || abs(u) &gt; 2000) stopAllTasks();
+    """
 
