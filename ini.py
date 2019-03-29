@@ -23,7 +23,7 @@ def offset(): # Funcion para medir el offset inicial
         gMin = 32767
 
         for i in range(40):
-            g = Gyro.angle
+            g = math.radians(Gyro.angle) # Offset (rad)
             offset_gyro += g
             time.sleep(0.05)
             if gMax < g:
@@ -48,9 +48,6 @@ except: # Se asume HiTechnic Gyro si LEGO Gyro no se encontro
     gyroSensor          = ev3.Sensor(address="ev3-ports:in2")
     gyroType            = 'HITECHNIC-NXT-Gyro'
 
-# Abrimos el archivo de lectura del Giroscopio
-Gyro = GyroSensor()
-Gyro.mode = 'GYRO-ANG'
 
 # Inicializacion del sensor de contacto
 touchSensor         = ev3.TouchSensor()
@@ -59,7 +56,13 @@ touchSensorValueRaw = open(touchSensor._path + "/value0", "rb")
 # Configuracion de los motores
 motorLeft  = LargeMotor(OUTPUT_D)
 motorRight = LargeMotor(OUTPUT_A)
+motorLeft.reset()
+motorRight.reset()
 
+# Abrimos el archivo de lectura del Giroscopio
+Gyro = GyroSensor()
+offset_gyro = offset()
+Gyro.mode = 'GYRO-ANG'
 
 velocidad = 0
 aceleracion = 50
@@ -70,7 +73,7 @@ k = 0.0
 
 # Inicializaciones de equilibrio
 
-offset_gyro = offset()
+# offset_gyro = offset()
 
 # Valores **
 kp = 0.00442
@@ -89,7 +92,7 @@ theta = 0 # Angulo
 xdes = 0.0 # Error con la posicion del destino
 n_max = 7
 n = 0
-x = 0
+x = 0.0
 dx = 0
 n_ant= 0
 encoder = [0] * n_max

@@ -2,17 +2,25 @@
     "version": "0.2.0",
     "configurations": [
 
+
         {
-            "name": "Download and Run.py",
+            "name": "Ejecuta TFG",
             "type": "ev3devBrowser",
             "request": "launch",
             "program": "/home/robot/${workspaceRootFolderName}/main.py"
         },
         {
-            "name": "Download and Run Current File",
+            "name": "Ejecuta codigo copiado",
             "type": "ev3devBrowser",
             "request": "launch",
-            "program": "/home/robot/${workspaceRootFolderName}/${relativeFile}"
+            "program": "/home/robot/${workspaceRootFolderName}/codigo copiado/main.py"
+        },
+        {
+            "name": "Ejecuta pruebas",
+            "type": "ev3devBrowser",
+            "request": "launch",
+            "program": "/home/robot/${workspaceRootFolderName}/pruebas.py"
         }
+
     ]
 }

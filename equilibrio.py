@@ -6,98 +6,67 @@ import ev3dev.ev3 as ev3
 import importlib
 import json
 import ini
-#from ini import *
 import inout
+from ev3dev2.motor import SpeedDPS
+import math
 
 ########################################################################
 ## ARCHIVO PARA EQUILIBRAR A WALLY
 ########################################################################
 
 def equilibrar():
-    g = ini.Gyro.angle
+    ini.motorRight.reset()
+    g = ini.Gyro.rate # Velocidad Angular del Giroscopio (grados/s)
     time.sleep(0.002)
-    g = g + ini.Gyro.angle
+    g = g + ini.Gyro.rate
 
-    ini.dtheta = g/2.0 - ini.offset_gyro
+    ini.dtheta = g/2.0 - ini.offset_gyro # Velocidad Angular (grados/s)
     ini.offset_gyro = ini.offset_gyro*0.999 + (0.001*(ini.dtheta + ini.offset_gyro)) # Actualizamos el offset
-    ini.theta = ini.theta + ini.dtheta*ini.dt
+    ini.theta = ini.theta + ini.dtheta*ini.dt # Angulo (grados)
     ini.theta = ini.theta*0.999 - ini.theta*0.001
-    inout.eprint("ini.theta: " + str(ini.theta))
-
-    if ini.v > ini.velocidad*10.0:
-        ini.v = ini.v + ini.aceleracion*10.0*ini.dt
-    elif ini.v > ini.velocidad*10.0:
-        ini.v = ini.v - ini.aceleracion*10.0*ini.dt
-    ini.xdes = ini.xdes + ini.v*ini.dt
+    inout.eprint('\r' + "Angulo: " + str(ini.theta))
+    inout.eprint("Velocidad Angular: " + str(ini.dtheta))
 
     ini.n = ini.n + 1
     if ini.n == ini.n_max:
         ini.n = 0
-    ini.encoder[ini.n] = ini.motorLeft.position + ini.motorRight.position + ini.xdes
+    ini.xdes = 0
+    ini.x = ini.motorLeft.position + ini.motorRight.position # Posición (deg)
     ini.n_ant = ini.n + 1
     if ini.n_ant == ini.n_max:
         ini.n_ant = 0
-    ini.x = ini.encoder[ini.n]*ini.radio*ini.gra2rad
-    ini.dx = (ini.encoder[ini.n] - ini.encoder[ini.n_ant]) / (ini.dt*(ini.n_max - 1))*ini.radio*ini.gra2rad
+    ini.encoder[ini.n] = ini.x # Posicion (rotaciones)
+    average = 0
+    for i in range(ini.n_max):
+        average = average + ini.encoder[i]
+        inout.eprint("ini.encoder[" + str(i) + "] = " + str(ini.encoder[i]))
+    average = average / ini.n_max
+    inout.eprint("average = " + str(average))
+    ini.dx = average / ini.dt #Posicion
 
     # contralador PID
-    if ini.velocidad == 0:
-        ini.g_dx = 24
-        ini.g_x = 700
-    else:
-        ini.g_dx = 62
-        ini.g_x = 750
+    k1 = 26.5
+    k2 = 1.56
+    k3 = 0.15
+    k4 = 0.13
 
 
-    ini.e = ini.g_th*ini.theta + ini.g_dth*ini.dtheta + ini.g_x*ini.x + ini.g_dx*ini.dx
+    ini.e = (k1*ini.theta + k2*ini.dtheta + k3*ini.x + k4*ini.dx)
     ini.de_dt = (ini.e - ini.e_prev)/ini.dt
+    inout.eprint("Rotacion del motor = " + str(ini.x))
+    inout.eprint("Velocidad del motor = " + str(ini.dx))
     ini.iedt = ini.iedt + ini.e*ini.dt
     ini.e_prev = ini.e
-    inout.eprint("ini.e = " + str(ini.e))
-    inout.eprint("ini.iedt = " + str(ini.iedt))
-    inout.eprint("ini.de_dt = " + str(ini.de_dt))
-    ini.u = (ini.kp*ini.e + ini.ki*ini.iedt + ini.kd*ini.de_dt)/ini.radio
-    ini.u_rot = ini.rotacion / ini.radio
+    inout.eprint("p = " + str(ini.e))
     ini.rot_prev = ini.rotacion
 
-    #inout.SetDuty(ini.motorDutyCycleRight, ini.u + ini.u_rot)
-    #inout.SetDuty(ini.motorDutyCycleLeft, ini.u + ini.u_rot)
-    duty = (ini.u + ini.u_rot)*10
-    ini.motorLeft.run_forever(speed_sp=duty)
-    ini.motorRight.run_forever(speed_sp=duty)
-
-    inout.eprint("ini.u = " + str(ini.u))
-    inout.eprint("ini.u_rot = " + str(ini.u_rot))
-
-    """
-    //lectura del giroscopio
-
-            motor[motorA] = u + u_rot;
-            motor[motorC] = u - u_rot;
-
-            //controlador de rotacion
-            if (m &lt; 100) {
-                e_rot = of - o;
-
-                //para buscar el menor sentido de giro
-                if (e_rot &gt; PI) e_rot = e_rot-(2*PI);
-                else if ( e_rot &lt; -PI) e_rot = e_rot + (2*PI);
-
-                //Constante Kp del controlador P
-                kp_rot = 6.0;
-                if(abs(e_rot) &gt; gra2rad*5) kp_rot = 0.4;
-                if(m == 10 || m == 20 || m == 30) kp_rot = 0.20;
-
-                rotacion = e_rot*kp_rot;
-            }
-
-            while (time1[T1] &lt; dt*1000.0) {
-                wait1Msec(1);
-            }
-
-            clearTimer(T1);
-            k++;
-
-            if (abs(theta) &gt; 60 || abs(u) &gt; 2000) stopAllTasks();
-    """
-
+    if ini.e > 1050:
+        ini.e = 1050
+    elif ini.e < -1050:
+        ini.e = -1050
+    v = int(ini.e/ini.motorLeft.max_speed*100)
+    #ini.motorLeft.on(speed = ini.e)
+    ini.motorLeft.on(speed=SpeedDPS(ini.e))
+    ini.motorRight.on(speed=SpeedDPS(ini.e))
+    inout.eprint("speed = " + str(ini.motorLeft.speed))
+    inout.eprint("speed = " + str(ini.e))
